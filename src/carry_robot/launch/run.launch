@@ -1,0 +1,7 @@
+<launch>
+    <include file="$(find carry_robot)/launch/carry_robot_w4a.launch" />
+
+    <include file="$(find carry_robot)/launch/view_grab.launch" />
+
+    <include file="$(find carry_robot)/launch/complete_flow_mm_m.launch" />
+</launch>

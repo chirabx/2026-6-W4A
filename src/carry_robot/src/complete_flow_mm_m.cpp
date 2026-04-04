@@ -17,20 +17,18 @@ typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseCl
 
 void sendGoal(MoveBaseClient &ac, double x, double y, double yaw);
 void performRetryLogic(MoveBaseClient &ac, double x, double y, double yaw);
+void move_safe(ros::Publisher &pub, double vx, double vy, int max_count);
 
-// Retry logic function
-void performRetryLogic(MoveBaseClient &ac, double x, double y, double yaw)
+// 安全移动封装函数
+void move_safe(ros::Publisher &pub, double vx, double vy, int max_count)
 {
-    ros::NodeHandle nh;
     geometry_msgs::Twist vel_msg;
-    ros::Publisher pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
-    int count = 0;
+    vel_msg.linear.x = vx;
+    vel_msg.linear.y = vy;
     ros::Rate loop_rate(10);
+    int count = 0;
 
-    ROS_INFO("Executing backward retry logic...");
-    vel_msg.linear.x = -0.05; // Backward speed
-    count = 0;
-    while (ros::ok() && count < 30) // Backward 30 steps
+    while (ros::ok() && count < max_count)
     {
         pub.publish(vel_msg);
         ros::spinOnce();
@@ -39,12 +37,22 @@ void performRetryLogic(MoveBaseClient &ac, double x, double y, double yaw)
     }
     // Stop
     vel_msg.linear.x = 0.0;
+    vel_msg.linear.y = 0.0;
     pub.publish(vel_msg);
+}
+
+// Retry logic function
+void performRetryLogic(MoveBaseClient &ac, double x, double y, double yaw)
+{
+    ros::NodeHandle nh;
+    ros::Publisher pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
+
+    ROS_INFO("Executing backward retry logic...");
+    move_safe(pub, -0.05, 0.0, 30); // Backward 30 steps
 
     ROS_INFO("Retrying to move to target point (%.3f, %.3f, %.3f)", x, y, yaw);
     sendGoal(ac, x, y, yaw);
 }
-
 
 void tagIdCallback(const std_msgs::Int32::ConstPtr &msg)
 {
@@ -115,86 +123,14 @@ int main(int argc, char **argv)
     double tag_2_put_x = 1.06;   // 放置tag2的x坐标1.26
     double tag_2_put_y = 2.20; // 放置tag2的y坐标
 
-    // double offset_left = 0.15;  // tag1在桌子中轴线左侧10cm    0.15
-    // double offset_right = 0.15; // tag2在桌子中轴线右侧10cm
-
-    // 使用参数服务器获取参数，若不需要参数服务器，可将以下代码注释掉
-    /*------------------------------------------------------------------------*/
-    // nh.getParam("/w4a_complete_flow_node/grab_desk_x", grab_desk_x);
-    // nh.getParam("/w4a_complete_flow_node/grab_desk_y", grab_desk_y);
-    // nh.getParam("/w4a_complete_flow_node/tag_1_put_x", tag_1_put_x);
-    // nh.getParam("/w4a_complete_flow_node/tag_1_put_y", tag_1_put_y);
-    // nh.getParam("/w4a_complete_flow_node/tag_2_put_x", tag_2_put_x);
-    // nh.getParam("/w4a_complete_flow_node/tag_2_put_y", tag_2_put_y);
-    // nh.getParam("/w4a_complete_flow_node/offset_left", offset_left);
-    // nh.getParam("/w4a_complete_flow_node/offset_right", offset_right);
-    // /*------------------------------------------------------------------------*/
-
-    //声明
-    geometry_msgs::Twist vel_msg;
-    int count = 0;
-    ros::Rate loop_rate(10);
-
-
     //左移
-    vel_msg.linear.y = 0.2;
-    while (ros::ok() && count < 10)
-    {
-        pub.publish(vel_msg);
-        ros::spinOnce();
-        loop_rate.sleep();
-        count++;
-    }
-    // 停下
-    vel_msg.linear.y = 0.0;
-    pub.publish(vel_msg);
-
-    count = 0;
-    vel_msg.linear.x = 0.3;
-    while (ros::ok() && count < 40)   //10
-    {
-        pub.publish(vel_msg);
-        ros::spinOnce();
-        loop_rate.sleep();
-        count++;
-    }
-    // 停下
-    vel_msg.linear.x = 0.0;
-    pub.publish(vel_msg);
-
+    move_safe(pub, 0.0, 0.2, 14);
+    //前移
+    move_safe(pub, 0.3, 0.0, 50);
 
     //导航到货架
     sendGoal(ac, grab_desk_x, grab_desk_y, 0);
 
-    // count = 0;
-
-    // vel_msg.linear.y = 0.1;
-    // while (ros::ok() && count < 10)
-    // {
-    //     pub.publish(vel_msg);
-    //     ros::spinOnce();
-    //     loop_rate.sleep();
-    //     count++;
-    // }
-    // // 停下
-    // vel_msg.linear.y = 0.0;
-    // pub.publish(vel_msg);
-
-    // count = 0;
-    // vel_msg.linear.x = 0.1;
-    // while (ros::ok() && count < 7)   //10
-    // {
-    //     pub.publish(vel_msg);
-    //     ros::spinOnce();
-    //     loop_rate.sleep();
-    //     count++;
-    // }
-    // // 停下
-    // vel_msg.linear.x = 0.0;
-    // pub.publish(vel_msg);
-
-
-    
     // 启动 print_id.launch 文件
     system("roslaunch carry_robot print_id.launch");
 
@@ -206,257 +142,64 @@ int main(int argc, char **argv)
     }
 
     // 先后退一小段,大约30cm，防止规划时发生碰撞
-    vel_msg.linear.x = -0.1;
-    count = 0;
-    while (ros::ok() && count < 30)
-    {
-        pub.publish(vel_msg);
-        ros::spinOnce();
-        loop_rate.sleep();
-        count++;
-    }
-    // 停下
-    vel_msg.linear.x = 0.0;
-    pub.publish(vel_msg);
+    move_safe(pub, -0.1, 0.0, 30);
+
     // 根据 tag_id 执行不同的任务
     if (tag_id == 1)
     {
         // put TAG1
         sendGoal(ac, tag_1_put_x, tag_1_put_y, 1.57);
         tag_id = 2;
-        // vel_msg.linear.y = -0.1;
-        // count = 0;
-        // while (ros::ok() && count < 30)
-        // {
-        //     pub.publish(vel_msg);
-        //     ros::spinOnce();
-        //     loop_rate.sleep();
-        //     count++;
-        // }
-        // // 停下
-        // vel_msg.linear.y = 0.0;
-        // pub.publish(vel_msg);
 
         // 放置物块
         system("roslaunch carry_robot arm_put.launch");
-        vel_msg.linear.x = -0.2;
-        count = 0;
-        while (ros::ok() && count < 25)
-        {
-            pub.publish(vel_msg);
-            ros::spinOnce();
-            loop_rate.sleep();
-            count++;
-        }
-        // 停下
-        vel_msg.linear.x = 0.0;
-        pub.publish(vel_msg);
-
+        move_safe(pub, -0.2, 0.0, 25);
     }
     else if (tag_id == 2)
     {
         // 抓取 TAG2
         sendGoal(ac, tag_2_put_x, tag_2_put_y, 1.57);
         tag_id = 1;
-        // vel_msg.linear.y = 0.1;
-        // count = 0;
-        // while (ros::ok() && count < 30)
-        // {
-        //     pub.publish(vel_msg);
-        //     ros::spinOnce();
-        //     loop_rate.sleep();
-        //     count++;
-        // }
-        // // 停下
-        // vel_msg.linear.y = 0.0;
-        // pub.publish(vel_msg);
 
         // 放置物块
         system("roslaunch carry_robot arm_put.launch");
-        vel_msg.linear.x = -0.2;
-        count = 0;
-        while (ros::ok() && count < 25)
-        {
-            pub.publish(vel_msg);
-            ros::spinOnce();
-            loop_rate.sleep();
-            count++;
-        }
-        // 停下
-        vel_msg.linear.x = 0.0;
-        pub.publish(vel_msg);
+        move_safe(pub, -0.2, 0.0, 25);
     }
-
 
     // 先右移一小段,大约30cm，防止再规划碰撞
-    
     sendGoal(ac, grab_desk_x, grab_desk_y, 0);
-    // vel_msg.linear.y = -0.1;
-    // while (ros::ok() && count < 25)
-    // {
-    //     pub.publish(vel_msg);
-    //     ros::spinOnce();
-    //     loop_rate.sleep();
-    //     count++;
-    // }
-    // // 停下
-    // vel_msg.linear.y = 0.0;
-    // pub.publish(vel_msg);
-    // sleep(0.5);
+    
+    // 前进
+    move_safe(pub, 0.1, 0.0, 5);
 
-    vel_msg.linear.x = 0.1;
-    count = 0;
-    while (ros::ok() && count < 5)
-    {
-        pub.publish(vel_msg);
-        ros::spinOnce();
-        loop_rate.sleep();
-        count++;
-    }
-    // 停下
-    vel_msg.linear.x = 0.0;
-    pub.publish(vel_msg);
     // 抓取TAG位1的物块
     system("roslaunch carry_robot print_id.launch");
 
-
-    vel_msg.linear.y = 0.15;
-    count = 0;
-
-    while (ros::ok() && count < 10){    
-        pub.publish(vel_msg);
-        ros::spinOnce();
-        loop_rate.sleep();
-        count++;
-    }
-    // 停下
-    vel_msg.linear.y = 0.0;
-    pub.publish(vel_msg);
-
-
-    vel_msg.linear.x = -0.1;
-    count = 0;
-    while (ros::ok() && count < 20)
-    {
-        pub.publish(vel_msg);
-        ros::spinOnce();
-        loop_rate.sleep();
-        count++;
-    }
-    // 停下
-    vel_msg.linear.x = 0.0;
-    pub.publish(vel_msg);
-    //dao tui hou xiang qian yidong 
-    // vel_msg.linear.x = 0.1;
-    // count = 0;
-    // while (ros::ok() && count < 20)
-    // {
-    //     pub.publish(vel_msg);
-    //     ros::spinOnce();
-    //     loop_rate.sleep();
-    //     count++;
-    // }
-    // // 停下
-    // vel_msg.linear.x = 0.0;
-    // pub.publish(vel_msg);
+    move_safe(pub, 0.0, 0.15, 10);
+    move_safe(pub, -0.1, 0.0, 20);
 
     // 发送放置导航点
     if (tag_id == 1)
     {
         sendGoal(ac, tag_1_put_x, tag_1_put_y, 1.57);
-        // vel_msg.linear.y = -0.1;
-        // count = 0;
-        // while (ros::ok() && count < 30)
-        // {
-        //     pub.publish(vel_msg);
-        //     ros::spinOnce();
-        //     loop_rate.sleep();
-        //     count++;
-        // }
-        // // 停下
-        // vel_msg.linear.y = 0.0;
-        // pub.publish(vel_msg);
-
         // 放置物块
         system("roslaunch carry_robot arm_put.launch");
-
-        vel_msg.linear.x = -0.2;
-        count = 0;
-        while (ros::ok() && count < 25)
-        {
-            pub.publish(vel_msg);
-            ros::spinOnce();
-            loop_rate.sleep();
-            count++;
-        }
-        // 停下
-        vel_msg.linear.x = 0.0;
-        pub.publish(vel_msg);
+        move_safe(pub, -0.2, 0.0, 25);
     }
     else if (tag_id == 2)
     {
         sendGoal(ac, tag_2_put_x, tag_2_put_y, 1.57);
-        
-        // vel_msg.linear.y = 0.1;
-        // count = 0;
-        // while (ros::ok() && count < 30)
-        // {
-        //     pub.publish(vel_msg);
-        //     ros::spinOnce();
-        //     loop_rate.sleep();
-        //     count++;
-        // }
-        // // 停下
-        // vel_msg.linear.y = 0.0;
-        // pub.publish(vel_msg);
-
         // 放置物块
         system("roslaunch carry_robot arm_put.launch");
-        vel_msg.linear.x = -0.2;
-        count = 0;
-        while (ros::ok() && count < 25)
-        {
-            pub.publish(vel_msg);
-            ros::spinOnce();
-            loop_rate.sleep();
-            count++;
-        }
-        // 停下
-        vel_msg.linear.x = 0.0;
-        pub.publish(vel_msg);
+        move_safe(pub, -0.2, 0.0, 25);
     }
-
 
     // 发送返回导航点
     sendGoal(ac, 0.0, 0.0, -1.57);
-    // zhongdian cheshen tiaozheng
-    vel_msg.linear.x = 0.1;
     
-    count = 0;
-    while (ros::ok() && count < 23) // yyx
-    {
-        pub.publish(vel_msg);
-        ros::spinOnce();
-        loop_rate.sleep();
-        count++;
-    }
-    // 停下
-    vel_msg.linear.x = 0.0;
+    // zhongdian cheshen tiaozheng (终点车身调整)
+    move_safe(pub, 0.1, 0.0, 23); // yyx
+    move_safe(pub, 0.0, -0.08, 23); // cbx
 
-    pub.publish(vel_msg);
-
-    vel_msg.linear.y = -0.08;//cbx
-    count = 0;
-    while (ros::ok() && count < 23) // yyx
-    {
-        pub.publish(vel_msg);
-        ros::spinOnce();
-        loop_rate.sleep();
-        count++;
-    }
-    // 停下
-
-    vel_msg.linear.y = 0.0;
-    pub.publish(vel_msg);
     return 0;
 }
