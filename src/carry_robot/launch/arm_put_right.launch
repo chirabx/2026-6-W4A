@@ -1,0 +1,4 @@
+<launch>
+  <node pkg="carry_robot" type="arm_put_right" name="arm_put_right" output="screen">
+  </node>
+</launch>

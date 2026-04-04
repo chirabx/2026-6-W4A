@@ -1,0 +1,6 @@
+/.vscode/*
+/.idea/*
+/devel/*
+/build/*
+/src/.vscode/*
+.catkin_workspace
