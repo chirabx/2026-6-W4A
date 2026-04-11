@@ -19,6 +19,11 @@ void sendGoal(MoveBaseClient &ac, double x, double y, double yaw);
 void performRetryLogic(MoveBaseClient &ac, double x, double y, double yaw);
 void move_safe(ros::Publisher &pub, double vx, double vy, int max_count);
 
+// 声明新添加的放置函数
+void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id, 
+               double t1_x, double t1_y, 
+               double t2_x, double t2_y);
+
 // 安全移动封装函数
 void move_safe(ros::Publisher &pub, double vx, double vy, int max_count)
 {
@@ -39,6 +44,34 @@ void move_safe(ros::Publisher &pub, double vx, double vy, int max_count)
     vel_msg.linear.x = 0.0;
     vel_msg.linear.y = 0.0;
     pub.publish(vel_msg);
+}
+
+// 根据识别到的 Tag ID 决定放到哪里去的封装函数
+void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id, 
+               double t1_x, double t1_y, 
+               double t2_x, double t2_y)
+{
+    if (current_id == 1)
+    {
+        ROS_INFO("Camera detected TAG 1. Moving to put zone 1...");
+        sendGoal(ac, t1_x, t1_y, 1.57);
+    }
+    else if (current_id == 2)
+    {
+        ROS_INFO("Camera detected TAG 2. Moving to put zone 2...");
+        sendGoal(ac, t2_x, t2_y, 1.57);
+    }
+    else
+    {
+        ROS_WARN("Invalid TAG ID detected (%d). Aborting put task!", current_id);
+        return; // 如果识别出错，跳过放置
+    }
+
+    // 执行放置动作
+    system("roslaunch carry_robot arm_put.launch");
+    
+    // 统一执行放置后的安全后退
+    move_safe(pub, -0.2, 0.0, 25);
 }
 
 // Retry logic function
@@ -114,22 +147,24 @@ int main(int argc, char **argv)
     // 订阅 /detected_tag_id 主题
     ros::Subscriber sub = nh.subscribe("/detected_tag_id", 1000, tagIdCallback);
 
-    double grab_desk_x = 2.12;  // 抓取的桌子的x坐标
-    double grab_desk_y = 0.13; // 抓取的桌子的y坐标
+    double grab_desk_x = 2.15;  // 抓取的桌子的x坐标
+    double grab_desk_y = 0.01; //抓取的桌子的y坐标0.01
 
-    double tag_1_put_x = 1.95;   // 放置tag1的x坐标
-    double tag_1_put_y = 2.20; // 放置tag1的y坐标 2.28
+    double tag_1_put_x = 1.97;   // 放置tag1的x坐标 2.00
+    double tag_1_put_y = 2.10; // 放置tag1的y坐标 2.07
 
-    double tag_2_put_x = 1.06;   // 放置tag2的x坐标1.26
-    double tag_2_put_y = 2.20; // 放置tag2的y坐标
+    double tag_2_put_x = 0.95;   // 放置tag2的x坐标1.00 0.9
+    double tag_2_put_y = 2.12; // 放置tag2的y坐标 2.12
 
     //左移
-    move_safe(pub, 0.0, 0.2, 14);
+    move_safe(pub, 0.0, 0.2, 18);
     //前移
-    move_safe(pub, 0.3, 0.0, 50);
+    move_safe(pub, 0.3, 0.0, 60);
 
     //导航到货架
     sendGoal(ac, grab_desk_x, grab_desk_y, 0);
+
+    // ================= 第一次抓取与放置 =================
 
     // 启动 print_id.launch 文件
     system("roslaunch carry_robot print_id.launch");
@@ -142,29 +177,17 @@ int main(int argc, char **argv)
     }
 
     // 先后退一小段,大约30cm，防止规划时发生碰撞
-    move_safe(pub, -0.1, 0.0, 30);
+    move_safe(pub, 0.0, 0.15, 10);
 
-    // 根据 tag_id 执行不同的任务
-    if (tag_id == 1)
-    {
-        // put TAG1
-        sendGoal(ac, tag_1_put_x, tag_1_put_y, 1.57);
-        tag_id = 2;
+    // 调用放置函数，根据真实识别到的 tag_id 去放置
+    put_where(ac, pub, tag_id, tag_1_put_x, tag_1_put_y, tag_2_put_x, tag_2_put_y);
 
-        // 放置物块
-        system("roslaunch carry_robot arm_put.launch");
-        move_safe(pub, -0.2, 0.0, 25);
-    }
-    else if (tag_id == 2)
-    {
-        // 抓取 TAG2
-        sendGoal(ac, tag_2_put_x, tag_2_put_y, 1.57);
-        tag_id = 1;
+    // 【关键】：重置标志位，让系统忘记第一个 ID，为第二次识别做准备
+    tag_received = false;
+    tag_id = -1;
 
-        // 放置物块
-        system("roslaunch carry_robot arm_put.launch");
-        move_safe(pub, -0.2, 0.0, 25);
-    }
+
+    // ================= 第二次抓取与放置 =================
 
     // 先右移一小段,大约30cm，防止再规划碰撞
     sendGoal(ac, grab_desk_x, grab_desk_y, 0);
@@ -172,34 +195,31 @@ int main(int argc, char **argv)
     // 前进
     move_safe(pub, 0.1, 0.0, 5);
 
-    // 抓取TAG位1的物块
+    // 抓取TAG位1的物块 (重新启动摄像头识别)
     system("roslaunch carry_robot print_id.launch");
 
-    move_safe(pub, 0.0, 0.15, 10);
-    move_safe(pub, -0.1, 0.0, 20);
+    while (!tag_received && ros::ok())
+    {
+        ros::spinOnce();
+        sleep(0.1);
+    }
 
-    // 发送放置导航点
-    if (tag_id == 1)
-    {
-        sendGoal(ac, tag_1_put_x, tag_1_put_y, 1.57);
-        // 放置物块
-        system("roslaunch carry_robot arm_put.launch");
-        move_safe(pub, -0.2, 0.0, 25);
-    }
-    else if (tag_id == 2)
-    {
-        sendGoal(ac, tag_2_put_x, tag_2_put_y, 1.57);
-        // 放置物块
-        system("roslaunch carry_robot arm_put.launch");
-        move_safe(pub, -0.2, 0.0, 25);
-    }
+    // 调整车身姿态
+    move_safe(pub, 0.0, 0.15, 10);
+    // move_safe(pub, -0.1, 0.0, 20);
+
+    // 再次调用放置函数，小车会根据刚刚【重新识别】到的新 ID 去对应位置
+    put_where(ac, pub, tag_id, tag_1_put_x, tag_1_put_y, tag_2_put_x, tag_2_put_y);
+
+
+    // ================= 任务结束，返回原点 =================
 
     // 发送返回导航点
-    sendGoal(ac, 0.0, 0.0, -1.57);
+    sendGoal(ac, 0.3, 0.0, 0);
     
     // zhongdian cheshen tiaozheng (终点车身调整)
-    move_safe(pub, 0.1, 0.0, 23); // yyx
-    move_safe(pub, 0.0, -0.08, 23); // cbx
-
+    
+    move_safe(pub, 0.0, -0.08, 23); // cbx23
+    move_safe(pub, -0.1, 0.0, 50); // yyx
     return 0;
 }

@@ -159,9 +159,6 @@ void callback(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
                 tag_id_pub.publish(tag_id_msg);
             }
             
-
-
-
             // 根据 AprilTag 的 ID 启动不同的 launch 文件
             if (tag_id == 1 && !tag_1_detected)
             {
