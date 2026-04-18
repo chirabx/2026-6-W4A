@@ -182,20 +182,19 @@ int main(int argc, char **argv)
     // 调用放置函数，根据真实识别到的 tag_id 去放置
     put_where(ac, pub, tag_id, tag_1_put_x, tag_1_put_y, tag_2_put_x, tag_2_put_y);
 
-    // 【关键】：重置标志位，让系统忘记第一个 ID，为第二次识别做准备
+    // 重置标志位，让系统忘记第一个 ID，为第二次识别做准备
     tag_received = false;
     tag_id = -1;
 
 
     // ================= 第二次抓取与放置 =================
 
-    // 先右移一小段,大约30cm，防止再规划碰撞
     sendGoal(ac, grab_desk_x, grab_desk_y, 0);
     
     // 前进
     move_safe(pub, 0.1, 0.0, 5);
 
-    // 抓取TAG位1的物块 (重新启动摄像头识别)
+    // 抓取TAG位1的物块 (启动摄像头识别)
     system("roslaunch carry_robot print_id.launch");
 
     while (!tag_received && ros::ok())
@@ -205,8 +204,8 @@ int main(int argc, char **argv)
     }
 
     // 调整车身姿态
-    move_safe(pub, 0.0, 0.15, 10);
-    // move_safe(pub, -0.1, 0.0, 20);
+    // move_safe(pub, 0.0, 0.15, 10);
+    move_safe(pub, -0.15, 0.0, 10);
 
     // 再次调用放置函数，小车会根据刚刚【重新识别】到的新 ID 去对应位置
     put_where(ac, pub, tag_id, tag_1_put_x, tag_1_put_y, tag_2_put_x, tag_2_put_y);

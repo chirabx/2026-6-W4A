@@ -2,9 +2,8 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include "geometry_msgs/TransformStamped.h"
 #include "geometry_msgs/PointStamped.h"
-#include <geometry_msgs/Twist.h> //yyx
+#include <geometry_msgs/Twist.h> 
 #include <std_msgs/Int32.h>
-
 #include "upros_message/ArmPosition.h"
 #include "std_srvs/Empty.h"
 #include <ros/ros.h>
@@ -13,6 +12,27 @@
 void sleep(double second)
 {
     ros::Duration(second).sleep();
+}
+
+void move_safe(ros::Publisher &pub, double vx, double vy, int max_count)
+{
+    geometry_msgs::Twist vel_msg;
+    vel_msg.linear.x = vx;
+    vel_msg.linear.y = vy;
+    ros::Rate loop_rate(10);
+    int count = 0;
+
+    while (ros::ok() && count < max_count)
+    {
+        pub.publish(vel_msg);
+        ros::spinOnce();
+        loop_rate.sleep();
+        count++;
+    }
+    // 函数自动停止机器人，无需手动编写停止逻辑
+    vel_msg.linear.x = 0.0;
+    vel_msg.linear.y = 0.0;
+    pub.publish(vel_msg);
 }
 
 int main(int argc, char **argv)
@@ -54,40 +74,18 @@ int main(int argc, char **argv)
     std::cout << "x: " << x << " y: " << y << " z: " << z << " y1: " << y1 << std::endl;
 
     std_srvs::Empty empty_srv;
-    geometry_msgs::Twist vel_msg;
-    ros::Rate loop_rate(10);
-    int count = 0;
+    // 1. 距离过近，后退
     if (y1 < 135)
     {
-        vel_msg.linear.x = -0.08;
-
-        while (ros::ok() && count < 6)
-        {
-            pub.publish(vel_msg);
-            ros::spinOnce();
-            loop_rate.sleep();
-            count++;
-        }
-        // 停下
-        vel_msg.linear.x = 0.0;
-        pub.publish(vel_msg);
+        move_safe(pub, -0.08, 0.0, 6);
     }
+    // 2. 距离过远，前进
     if (y1 > 145)
     {
-
-        vel_msg.linear.x = 0.06; // 0.08
-
-        while (ros::ok() && count < int((y1 - 145) / 2))
-        {
-            pub.publish(vel_msg);
-            ros::spinOnce();
-            loop_rate.sleep();
-            count++;
-        }
-        // 停下
-        vel_msg.linear.x = 0.0;
-        pub.publish(vel_msg);
+        move_safe(pub, 0.06, 0.0, int((y1 - 145) / 2));
     }
+
+    // 3. Y坐标分段修正
     if (y1 > 160 && y1 < 180)
     {
         y = y - 30;
@@ -109,42 +107,20 @@ int main(int argc, char **argv)
         y = y - 130;
     }
 
+    // 4. X方向右移修正
     if (x >= -5)
     { //&& x<=30
         if (x < 0)
         {
             x = -x;
         }
-        vel_msg.linear.y = 0.04; // 0.06
-        count = 0;
-
-        while (ros::ok() && count < x + 2)
-        {
-            pub.publish(vel_msg);
-            ros::spinOnce();
-            loop_rate.sleep();
-            count++;
-        }
-        // 停下
-        vel_msg.linear.y = 0.0;
-        pub.publish(vel_msg);
+        move_safe(pub, 0.0, 0.04, x + 2);
         x = x + 10;
     }
+    // 5. X方向左移修正
     else if (x <= -25)
     {
-        vel_msg.linear.y = -0.05;
-        count = 0;
-
-        while (ros::ok() && count < (-x) - 25 + 3)
-        { //+3
-            pub.publish(vel_msg);
-            ros::spinOnce();
-            loop_rate.sleep();
-            count++;
-        }
-        // 停下
-        vel_msg.linear.y = 0.0;
-        pub.publish(vel_msg);
+        move_safe(pub, 0.0, -0.05, (-x) - 25 + 3);
     }
 
     if (x > 30 || x < -40)
@@ -165,7 +141,7 @@ int main(int argc, char **argv)
 
     arm_grab_client.call(empty_srv);
 
-    // 下探
+    // 下探抓取
     srv.request.x = x + 10;
     srv.request.y = y + 17; // 25
     srv.request.z = z - 7;  //-5
