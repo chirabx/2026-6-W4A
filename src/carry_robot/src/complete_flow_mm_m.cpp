@@ -151,9 +151,9 @@ int main(int argc, char **argv)
     double grab_desk_y = 0.01; //抓取的桌子的y坐标0.01
 
     double tag_1_put_x = 1.97;   // 放置tag1的x坐标 2.00
-    double tag_1_put_y = 2.10; // 放置tag1的y坐标 2.07
+    double tag_1_put_y = 2.12; // 放置tag1的y坐标 2.07
 
-    double tag_2_put_x = 0.95;   // 放置tag2的x坐标1.00 0.9
+    double tag_2_put_x = 0.95;   // 放置tag2的x坐标1.00 0.95
     double tag_2_put_y = 2.12; // 放置tag2的y坐标 2.12
 
     //左移
