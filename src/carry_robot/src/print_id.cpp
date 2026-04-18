@@ -5,12 +5,33 @@
 #include <tf/tf.h>
 
 ros::Publisher pub;
-ros::Publisher tag_id_pub; // 用于发布 tag_id 的发布者
+ros::Publisher tag_id_pub;     // 用于发布 tag_id 的发布者
 bool has_detected_tag = false; // 标志变量，表示是否检测到过 AprilTag
 bool tag_1_detected = false;   // 标志变量，表示是否检测到过 ID 为 1 的 AprilTag
 bool tag_2_detected = false;   // 标志变量，表示是否检测到过 ID 为 2 的 AprilTag
 
-void callback(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
+void move_safe(ros::Publisher &pub, double vx, double vy, int max_count)
+{
+    geometry_msgs::Twist vel_msg;
+    vel_msg.linear.x = vx;
+    vel_msg.linear.y = vy;
+    ros::Rate loop_rate(10);
+    int count = 0;
+
+    while (ros::ok() && count < max_count)
+    {
+        pub.publish(vel_msg);
+        ros::spinOnce();
+        loop_rate.sleep();
+        count++;
+    }
+    // Stop
+    vel_msg.linear.x = 0.0;
+    vel_msg.linear.y = 0.0;
+    pub.publish(vel_msg);
+}
+
+void callback(const apriltag_ros::AprilTagDetectionArray::ConstPtr &msg)
 {
     // 检测到的 AprilTag 数量
     size_t num_tags = msg->detections.size();
@@ -22,21 +43,8 @@ void callback(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
 
         if (!has_detected_tag)
         {
-            // 如果之前没有检测到过 AprilTag，让车辆后退
-            geometry_msgs::Twist vel_msg;
-            vel_msg.linear.x = -0.06;
-            int count = 0;
-            ros::Rate loop_rate(10);
-            while (ros::ok() && count < 3)
-            {
-                pub.publish(vel_msg);
-                ros::spinOnce();
-                loop_rate.sleep();
-                count++;
-            }
-            // 停下
-            vel_msg.linear.x = 0.0;
-            pub.publish(vel_msg);
+            // 未检测到标签，执行后退
+            move_safe(pub, -0.06, 0.0, 3);
         }
     }
     else
@@ -44,20 +52,15 @@ void callback(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
         // 检测到 AprilTag
         has_detected_tag = true; // 设置标志变量为 true
 
-        // 停止车辆
-        geometry_msgs::Twist vel_msg;
-        vel_msg.linear.x = 0.0;
-        pub.publish(vel_msg);
-
         // 遍历检测到的 AprilTag
-        for (const auto& detection : msg->detections)
+        for (const auto &detection : msg->detections)
         {
             // 输出 AprilTag 的 ID
-            int tag_id = detection.id[0];  // AprilTag 的 ID 是一个整数数组，通常取第一个元素
+            int tag_id = detection.id[0]; // AprilTag 的 ID 是一个整数数组，通常取第一个元素
             ROS_INFO("Detected AprilTag ID: %d", tag_id);
 
             // 获取 AprilTag 的位姿
-            const auto& pose = detection.pose;
+            const auto &pose = detection.pose;
 
             // 输出位姿信息
             ROS_INFO("AprilTag Pose: ");
@@ -69,96 +72,31 @@ void callback(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
             double roll, pitch, yaw;
             m.getRPY(roll, pitch, yaw);
 
-            double a=180/3.14;
+            double a = 180 / 3.14;
 
             // 输出欧拉角
-            ROS_INFO("Orientation: Roll = %f, Pitch = %f, Yaw = %f", roll*a, pitch*a, yaw*a);
+            ROS_INFO("Orientation: Roll = %f, Pitch = %f, Yaw = %f", roll * a, pitch * a, yaw * a);
 
-            double b=pitch*a;
-            double c=roll*a;
+            double b = pitch * a;
+            double c = roll * a;
 
-            if (b>60||b<-60||(c>80&&c<130)||(c<-80&&c>-130))
+            if (b > 60 || b < -60 || (c > 80 && c < 130) || (c < -80 && c > -130))
             {
-                geometry_msgs::Twist vel_msg;
-                vel_msg.linear.y = -0.06;
-                int count = 0;
-                ros::Rate loop_rate(10);
-                while (ros::ok() && count < 4)
-                {
-                    pub.publish(vel_msg);
-                    ros::spinOnce();
-                    loop_rate.sleep();
-                    count++;
-                }
-                // 停下
-                vel_msg.linear.y = 0.0;
-                pub.publish(vel_msg);
+                move_safe(pub, 0.0, -0.06, 4);
                 ROS_INFO("识别为侧面，已右移");
-                vel_msg.linear.x = -0.06;
-                count = 0;
-                
-                while (ros::ok() && count < 8)
-                {
-                    pub.publish(vel_msg);
-                    ros::spinOnce();
-                    loop_rate.sleep();
-                    count++;
-                }
-                // 停下
-                vel_msg.linear.x = 0.0;
-                pub.publish(vel_msg);
+                move_safe(pub, -0.06, 0.0, 8);
                 ROS_INFO("已后退");
             }
-            // if (b<-60)
-            // {
-            //     geometry_msgs::Twist vel_msg;
-            //     vel_msg.linear.y = 0.06;
-            //     int count = 0;
-            //     ros::Rate loop_rate(10);
-            //     while (ros::ok() && count < 4)
-            //     {
-            //         pub.publish(vel_msg);
-            //         ros::spinOnce();
-            //         loop_rate.sleep();
-            //         count++;
-            //     }
-            //     // 停下
-            //     vel_msg.linear.y = 0.0;
-            //     pub.publish(vel_msg);
-            //     ROS_INFO("识别为侧面,已zuo移");
-            //     vel_msg.linear.x = -0.06;
-            //     count = 0;
-                
-            //     while (ros::ok() && count < 4)
-            //     {
-            //         pub.publish(vel_msg);
-            //         ros::spinOnce();
-            //         loop_rate.sleep();
-            //         count++;
-            //     }
-            //     // 停下
-            //     vel_msg.linear.x = 0.0;
-            //     pub.publish(vel_msg);
-            //     ROS_INFO("已后退");
-            // }
-
-            // std_msgs::Int32 tag_Orientation_msg;
-            // tag_Orientation_msg.data = int(pitch*a);
-            // tag_Orientation_pub.publish(tag_Orientation_msg);
-            // tag_Orientation_pub.publish(tag_Orientation_msg);
-            // tag_Orientation_pub.publish(tag_Orientation_msg);
-
-
 
             // 发布 tag_id
             std_msgs::Int32 tag_id_msg;
             tag_id_msg.data = tag_id;
 
-            for (int i = 1; i <= 10; ++i) 
+            for (int i = 1; i <= 10; ++i)
             {
                 tag_id_pub.publish(tag_id_msg);
             }
-            
+
             // 根据 AprilTag 的 ID 启动不同的 launch 文件
             if (tag_id == 1 && !tag_1_detected)
             {
@@ -190,7 +128,6 @@ int main(int argc, char **argv)
 
     // 订阅 /tag_detections 主题
     ros::Subscriber sub = nh.subscribe("/tag_detections", 1000, callback);
-    
 
     // 保持节点运行
     ros::spin();
