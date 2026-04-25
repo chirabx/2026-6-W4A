@@ -2,7 +2,7 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include "geometry_msgs/TransformStamped.h"
 #include "geometry_msgs/PointStamped.h"
-#include <geometry_msgs/Twist.h> 
+#include <geometry_msgs/Twist.h>
 #include <std_msgs/Int32.h>
 #include "upros_message/ArmPosition.h"
 #include "std_srvs/Empty.h"
@@ -65,69 +65,73 @@ int main(int argc, char **argv)
     int bias_y = 95; // y方向的偏移，增加的机械臂往前多探的毫米数
     int bias_z = 75; // z方向的偏移，增加的机械臂往上多探的毫米数
 
-    // 单位转换，ros坐标系到逆运算坐标系
-    int y1 = int(tfs_1.transform.translation.x * 1000.0);
-    int x = int(tfs_1.transform.translation.y * 1000.0);
-    int y = y1 + bias_y;
-    int z = int(tfs_1.transform.translation.z * 1000.0) + bias_z;
+    // 首先我们要知道ros坐标系和逆运动学坐标系的关系，ros坐标系中x轴向前，y轴向左，z轴向上，
+    // 而逆运动学坐标系中x轴向前，y轴向右，z轴向上，所以我们在进行坐标转换时需要进行相应的调整。
+    int dist = int(tfs_1.transform.translation.x * 1000.0);           // 前后距离（distance）
+    int arm_x = int(tfs_1.transform.translation.y * 1000.0);          // 左右
+    int arm_y = dist + bias_y;                                        // 前后距离加上偏移得到机械臂y坐标
+    int arm_z = int(tfs_1.transform.translation.z * 1000.0) + bias_z; // 高度加上偏移得到机械臂z坐标
 
-    std::cout << "x: " << x << " y: " << y << " z: " << z << " y1: " << y1 << std::endl;
+    std::cout << "arm_x: " << arm_x << " arm_y: " << arm_y << " arm_z: " << arm_z << " dist: " << dist << std::endl;
 
     std_srvs::Empty empty_srv;
     // 1. 距离过近，后退
-    if (y1 < 135)
+    if (dist < 135)
     {
         move_safe(pub, -0.08, 0.0, 6);
     }
     // 2. 距离过远，前进
-    if (y1 > 145)
+    else if (dist > 145)
     {
-        move_safe(pub, 0.06, 0.0, int((y1 - 145) / 2));
+        move_safe(pub, 0.06, 0.0, int((dist - 145) / 2));
     }
 
     // 3. Y坐标分段修正
-    if (y1 > 160 && y1 < 180)
+    if (dist > 160 && dist < 260)
     {
-        y = y - 30;
-    }
-    else if (y1 >= 180 && y1 < 200)
-    {
-        y = y - 70;
-    }
-    else if (y1 >= 200 && y1 < 220)
-    {
-        y = y - 90;
-    }
-    else if (y1 >= 220 && y1 < 240)
-    {
-        y = y - 110;
-    }
-    else if (y1 >= 240 && y1 < 260)
-    {
-        y = y - 130;
-    }
-
-    // 4. X方向右移修正
-    if (x >= -5)
-    { //&& x<=30
-        if (x < 0)
+        if (dist < 180)
         {
-            x = -x;
+            arm_y -= 30;
         }
-        move_safe(pub, 0.0, 0.04, x + 2);
-        x = x + 10;
-    }
-    // 5. X方向左移修正
-    else if (x <= -25)
-    {
-        move_safe(pub, 0.0, -0.05, (-x) - 25 + 3);
+        else if (dist < 200)
+        {
+            arm_y -= 70;
+        }
+        else if (dist < 220)
+        {
+            arm_y -= 90;
+        }
+        else if (dist < 240)
+        {
+            arm_y -= 110;
+        }
+        else
+        {
+            arm_y -= 130;
+        } // dist >= 240 且 dist < 260
     }
 
-    if (x > 30 || x < -40)
+    // 4 & 5. X方向底盘平移修正
+    if (arm_x >= -5)
     {
-        x = -16;
-        y = 228;
-        z = 82;
+        // 右移修正
+        if (arm_x < 0)
+            arm_x = -arm_x;
+        move_safe(pub, 0.0, 0.04, arm_x + 2);
+        arm_x += 10;
+    }
+    else if (arm_x <= -25)
+    {
+        // 左移修正
+        move_safe(pub, 0.0, -0.05, -arm_x - 22);
+    }
+
+    // 6. 极限值保护 (超出工作空间强制设定安全姿态)
+    if (arm_x > 30 || arm_x < -40)
+    {
+        arm_x = -16;
+        arm_y = 228;
+        arm_z = 82;
     }
     // 逆运算移动抓取到上方
     upros_message::ArmPosition srv;
@@ -142,9 +146,9 @@ int main(int argc, char **argv)
     arm_grab_client.call(empty_srv);
 
     // 下探抓取
-    srv.request.x = x + 10;
-    srv.request.y = y + 17; // 25
-    srv.request.z = z - 7;  //-5
+    srv.request.x = arm_x + 10;
+    srv.request.y = arm_y + 17; // 25
+    srv.request.z = arm_z - 7;  //-5
     arm_pose_client.call(srv);
     sleep(3.0);
 

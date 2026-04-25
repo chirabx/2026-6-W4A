@@ -42,6 +42,9 @@ target_link_libraries(arm_put_left ${catkin_LIBRARIES})
 add_executable(arm_put_right src/arm_put_right.cpp)
 target_link_libraries(arm_put_right ${catkin_LIBRARIES})
 
+add_executable(arm_put_test src/arm_put_test.cpp)
+target_link_libraries(arm_put_test ${catkin_LIBRARIES})
+
 add_executable(w4a_task_flow_node src/task_flow.cpp)
 target_link_libraries(w4a_task_flow_node ${catkin_LIBRARIES})
 add_executable(complete_flow_mm_m src/complete_flow_mm_m.cpp)
