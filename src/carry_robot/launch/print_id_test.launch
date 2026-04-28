@@ -1,4 +1,4 @@
 <launch>
-  <node pkg="carry_robot" type="arm_grab_test" name="arm_grab_test" output="screen">
+  <node pkg="carry_robot" type="print_id_test" name="print_id_test" output="screen">
   </node>
 </launch>
