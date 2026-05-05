@@ -1,0 +1,4 @@
+<launch>
+  <node pkg="carry_robot" type="arm_reset" name="arm_reset" output="screen">
+  </node>
+</launch>

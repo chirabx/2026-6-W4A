@@ -24,8 +24,8 @@ target_link_libraries(print_id ${catkin_LIBRARIES})
 add_executable(arm_put src/arm_put.cpp)
 target_link_libraries(arm_put ${catkin_LIBRARIES})
 
-add_executable(complete_flow_mm src/complete_flow_mm.cpp)
-target_link_libraries(complete_flow_mm ${catkin_LIBRARIES})
+add_executable(arm_reset src/arm_reset.cpp)
+target_link_libraries(arm_reset ${catkin_LIBRARIES})
 
 add_executable(w4a_movebase_client src/movebase_client.cpp)
 target_link_libraries(w4a_movebase_client ${catkin_LIBRARIES})
@@ -35,12 +35,6 @@ target_link_libraries(w4a_tf_echo_node ${catkin_LIBRARIES})
 
 add_executable(w4a_arm_grab_node src/arm_grab.cpp)
 target_link_libraries(w4a_arm_grab_node ${catkin_LIBRARIES})
-
-add_executable(arm_put_left src/arm_put_left.cpp)
-target_link_libraries(arm_put_left ${catkin_LIBRARIES})
-
-add_executable(arm_put_right src/arm_put_right.cpp)
-target_link_libraries(arm_put_right ${catkin_LIBRARIES})
 
 add_executable(print_id_test src/print_id_test.cpp)
 target_link_libraries(print_id_test ${catkin_LIBRARIES})
