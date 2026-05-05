@@ -135,9 +135,11 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "send_goals_node");
     ros::NodeHandle nh;
-    std_srvs::Empty empty_srv;
-    ros::ServiceClient arm_zero_client = nh.serviceClient<std_srvs::Empty>("/control_center/zero_service");
-    arm_zero_client.call(empty_srv);
+
+    //复位
+    // std_srvs::Empty empty_srv;
+    // ros::ServiceClient arm_zero_client = nh.serviceClient<std_srvs::Empty>("/control_center/zero_service");
+    // arm_zero_client.call(empty_srv);
 
     ros::Publisher pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
 
@@ -176,8 +178,8 @@ int main(int argc, char **argv)
         sleep(0.1);
     }
 
-    // 先后退一小段,大约30cm，防止规划时发生碰撞
-    move_safe(pub, 0.0, 0.15, 10);
+    // 先后退一小段,防止规划时发生碰撞
+    move_safe(pub, -0.15, 0, 10);
 
     // 调用放置函数，根据真实识别到的 tag_id 去放置
     put_where(ac, pub, tag_id, tag_1_put_x, tag_1_put_y, tag_2_put_x, tag_2_put_y);
@@ -190,9 +192,6 @@ int main(int argc, char **argv)
     // ================= 第二次抓取与放置 =================
 
     sendGoal(ac, grab_desk_x, grab_desk_y, 0);
-    
-    // 前进
-    move_safe(pub, 0.1, 0.0, 5);
 
     // 抓取TAG位1的物块 (启动摄像头识别)
     system("roslaunch carry_robot print_id.launch");

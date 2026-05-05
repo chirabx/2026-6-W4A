@@ -143,7 +143,7 @@ int main(int argc, char **argv)
     arm_grab_client.call(empty_srv);
 
     // 下探抓取
-    srv.request.x = arm_x + 13; //10
+    srv.request.x = arm_x -7; //13
     srv.request.y = arm_y + 25; // 17
     srv.request.z = arm_z - 7;  //-5
     arm_pose_client.call(srv);
