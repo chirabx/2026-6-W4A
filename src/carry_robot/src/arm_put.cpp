@@ -20,31 +20,25 @@ int main(int argc, char **argv)
 
     // 放置的目标点，单位毫米，以机械臂基座上自转轴为基点，x左正右负，y前正后负，z上正下负
     int target_put_x = 0;//yyx
-    int target_put_y = 300;
-    int target_put_z = 0;
+    int target_put_y = 300; //300
+    int target_put_z = -47; //-45
     ROS_INFO("target_put_x = %d,target_put_y = %d,target_put_z = %d",target_put_x,target_put_y,target_put_z);
     upros_message::ArmPosition move_srv;
-    // //第一步，运动到放置点-高
-    // move_srv.request.x = target_put_x;
-    // move_srv.request.y = target_put_y;
-    // move_srv.request.z = target_put_z + 120;
-    // arm_move_close_client.call(move_srv);
-    // sleep(4.0);
 
-    //第二步，运动到放置点-低
+    //第一步，运动到放置点-低
     move_srv.request.x = target_put_x;
     move_srv.request.y = target_put_y;
-    move_srv.request.z = target_put_z - 45;
+    move_srv.request.z = target_put_z;
     arm_move_close_client.call(move_srv);
     sleep(2.5);
 
     std_srvs::Empty empty_srv;
     
-    //第三步，打开气泵 
+    //第二步，打开气泵 
     arm_release_client.call(empty_srv);
     sleep(1.0);
 
-   arm_zero_client.call(empty_srv);
+    arm_zero_client.call(empty_srv);
 
     ros::shutdown();
 
