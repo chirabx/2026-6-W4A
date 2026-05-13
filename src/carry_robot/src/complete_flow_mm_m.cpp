@@ -150,13 +150,13 @@ int main(int argc, char **argv)
     ros::Subscriber sub = nh.subscribe("/detected_tag_id", 1000, tagIdCallback);
 
     double grab_desk_x = 2.15;  // 抓取的桌子的x坐标
-    double grab_desk_y = 0.01; //抓取的桌子的y坐标0.01
+    double grab_desk_y = 0.08; //抓取的桌子的y坐标0.01
 
-    double tag_1_put_x = 1.97;   // 放置tag1的x坐标 2.00
-    double tag_1_put_y = 2.12; // 放置tag1的y坐标 2.07
+    double tag_1_put_x = 1.99;   // 放置tag1的x坐标 1.97
+    double tag_1_put_y = 2.11; // 放置tag1的y坐标 2.12
 
-    double tag_2_put_x = 0.95;   // 放置tag2的x坐标1.00 0.95
-    double tag_2_put_y = 2.12; // 放置tag2的y坐标 2.12
+    double tag_2_put_x = 0.97;   // 放置tag2的x坐标1.00 0.95
+    double tag_2_put_y = 2.11; // 放置tag2的y坐标 2.12
 
     //左移
     move_safe(pub, 0.0, 0.2, 18);
