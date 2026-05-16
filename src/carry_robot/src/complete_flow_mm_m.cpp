@@ -131,6 +131,8 @@ void sendGoal(MoveBaseClient &ac, ros::Publisher &pub, double x, double y, doubl
     {
     case actionlib::SimpleClientGoalState::SUCCEEDED:
         ROS_INFO("Target point (%.3f, %.3f, %.3f) reached successfully!", x, y, yaw);
+        // 等待底盘刹车稳定以及 AMCL 粒子滤波更新收敛
+        ros::Duration(0.5).sleep();
 
         // 获取实际坐标并基于理论值微调
         if (tfBuffer)
@@ -173,9 +175,9 @@ void sendGoal(MoveBaseClient &ac, ros::Publisher &pub, double x, double y, doubl
 
                     // 依次补偿前后和左右方向
                     if (count_x > 0)
-                        move_safe(pub, adjust_vx, 0.0, count_x);
+                        move_safe(pub, adjust_vx, 0.0, count_x +2);
                     if (count_y > 0)
-                        move_safe(pub, 0.0, adjust_vy, count_y);
+                        move_safe(pub, 0.0, adjust_vy, count_y +2);
 
                     ROS_INFO(">>> [Micro-Adjustment Complete]");
                 }
@@ -222,11 +224,11 @@ int main(int argc, char **argv)
     double grab_desk_x = 2.15; // 抓取的桌子的x坐标
     double grab_desk_y = 0.08; // 抓取的桌子的y坐标0.01
 
-    double tag_1_put_x = 1.99; // 放置tag1的x坐标 1.97
-    double tag_1_put_y = 2.11; // 放置tag1的y坐标 2.12
+    double tag_1_put_x = 2.02; // 放置tag1的x坐标 1.97
+    double tag_1_put_y = 2.10; // 放置tag1的y坐标 2.12
 
-    double tag_2_put_x = 0.97; // 放置tag2的x坐标1.00 0.95
-    double tag_2_put_y = 2.11; // 放置tag2的y坐标 2.12
+    double tag_2_put_x = 1.035; // 放置tag2的x坐标1.00 0.95
+    double tag_2_put_y = 2.08; // 放置tag2的y坐标 2.12
 
     // 左移
     move_safe(pub, 0.0, 0.2, 18);
