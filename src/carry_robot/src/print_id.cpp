@@ -87,14 +87,21 @@ void callback(const apriltag_ros::AprilTagDetectionArray::ConstPtr &msg)
                 move_safe(pub, -0.06, 0.0, 8);
                 ROS_INFO("已后退");
             }
-
+            int wait_count = 0;
+            // 稍作等待，确保主控程序的 Subscriber 已经连接上
+            while (tag_id_pub.getNumSubscribers() == 0 && wait_count < 10)
+            {
+                ros::Duration(0.1).sleep();
+                wait_count++;
+            }
             // 发布 tag_id
             std_msgs::Int32 tag_id_msg;
             tag_id_msg.data = tag_id;
 
-            for (int i = 1; i <= 10; ++i)
+            for (int i = 1; i <= 5; ++i)
             {
                 tag_id_pub.publish(tag_id_msg);
+                ros::Duration(0.05).sleep();
             }
 
             // 根据 AprilTag 的 ID 启动不同的 launch 文件

@@ -203,6 +203,10 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "send_goals_node");
     ros::NodeHandle nh;
 
+    // 开启后台异步接收回调
+    ros::AsyncSpinner spinner(1);
+    spinner.start();
+
     // 初始化全局 TF 监听器
     tfBuffer = std::make_shared<tf2_ros::Buffer>();
     tfListener = std::make_shared<tf2_ros::TransformListener>(*tfBuffer);
