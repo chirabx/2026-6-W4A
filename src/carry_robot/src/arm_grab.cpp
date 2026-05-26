@@ -112,12 +112,11 @@ int main(int argc, char **argv)
     }
 
     // 4 & 5. X方向底盘平移修正
-    if (arm_x >= -5)
+    if (arm_x >= -8)
     {
         move_safe(pub, 0.0, 0.04, arm_x + 7);
-        // arm_x += 10;
     }
-    else if (arm_x <= -25)
+    else if (arm_x <= -22)
     {
         // 左移修正
         move_safe(pub, 0.0, -0.05, -arm_x - 22);
