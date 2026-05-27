@@ -19,7 +19,7 @@ int main(int argc, char **argv)
     ros::ServiceClient arm_zero_client = nh.serviceClient<std_srvs::Empty>("/control_center/zero_service");
 
     // 放置的目标点，单位毫米，以机械臂基座上自转轴为基点，x左正右负，y前正后负，z上正下负
-    int target_put_x = 0;//yyx
+    int target_put_x = -9;//yyx cbx
     int target_put_y = 300; //300
     int target_put_z = -47; //-45
     ROS_INFO("target_put_x = %d,target_put_y = %d,target_put_z = %d",target_put_x,target_put_y,target_put_z);
