@@ -31,12 +31,14 @@ void sendGoal(MoveBaseClient &ac, ros::Publisher &pub, double x, double y, doubl
 void performRetryLogic(MoveBaseClient &ac, ros::Publisher &pub, double x, double y, double yaw);
 void move_safe(ros::Publisher &pub, double vx, double vy, int max_count);
 
-// 声明新添加的放置函数
+// 声明放置函数
 void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id,
                double t1_x, double t1_y,
                double t2_x, double t2_y);
 void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg);
 void align_with_wall(ros::Publisher &pub, double target_dist);
+void align_y_with_tf(ros::Publisher &pub, double target_x, double target_y);
+
 // 安全移动封装函数
 void move_safe(ros::Publisher &pub, double vx, double vy, int max_count)
 {
@@ -65,16 +67,22 @@ void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id,
                double t2_x, double t2_y)
 {
     double scan_dist = 0;
+    double target_x = 0; // 记录当前选择的X目标
+    double target_y = 0; // 记录当前选择的Y目标
     if (current_id == 1)
     {
         ROS_INFO("Camera detected TAG 1. Moving to put zone 1...");
-        sendGoal(ac, pub, t1_x, t1_y, 1.57);
+        target_x = t1_x;
+        target_y = t1_y;
+        sendGoal(ac, pub, target_x, target_y, 1.57);
         scan_dist = 0.63;
     }
     else if (current_id == 2)
     {
         ROS_INFO("Camera detected TAG 2. Moving to put zone 2...");
-        sendGoal(ac, pub, t2_x, t2_y, 1.57);
+        target_x = t2_x;
+        target_y = t2_y;
+        sendGoal(ac, pub, target_x, target_y, 1.57);
         scan_dist = 0.60;
     }
     else
@@ -82,10 +90,12 @@ void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id,
         ROS_WARN("Invalid TAG ID detected (%d). Aborting put task!", current_id);
         return; // 如果识别出错，跳过放置
     }
+
+    align_y_with_tf(pub, target_x, target_y);
+    sleep(0.5); // 等待车身稳定
+
     align_with_wall(pub, scan_dist); 
-    
-    // 等待车身稳定
-    sleep(0.5);
+    sleep(0.5); // 等待车身稳定
     // 执行放置动作
     system("roslaunch carry_robot arm_put.launch");
 
@@ -188,6 +198,67 @@ void align_with_wall(ros::Publisher &pub, double target_dist)
     pub.publish(stop_vel);
     ROS_INFO(">>> [LiDAR Alignment] Completed.");
 }
+
+// 基于TF的闭环左右横移对齐函数 (左右Y轴)
+void align_y_with_tf(ros::Publisher &pub, double target_x, double target_y)
+{
+    ROS_INFO(">>> [TF Alignment] Starting lateral (Left/Right) alignment...");
+    ros::Rate rate(10);
+    int timeout = 0;
+    int max_timeout = 60; // 最大允许调整6秒
+
+    while (ros::ok() && timeout < max_timeout)
+    {
+        try
+        {
+            // 获取当前真实坐标
+            geometry_msgs::TransformStamped current_tf = tfBuffer->lookupTransform("map", "base_link", ros::Time(0), ros::Duration(0.1));
+            double cur_x = current_tf.transform.translation.x;
+            double cur_y = current_tf.transform.translation.y;
+            double cur_yaw = tf2::getYaw(current_tf.transform.rotation);
+
+            // 计算全局偏差
+            double dx = target_x - cur_x;
+            double dy = target_y - cur_y;
+
+            // 将全局偏差转换到小车局部坐标系，重点提取左右方向的偏差 (local_dy)
+            double local_dy = -dx * sin(cur_yaw) + dy * cos(cur_yaw);
+
+            // 如果左右误差小于 1cm (0.01m)，说明对齐成功！
+            if (std::abs(local_dy) <= 0.01)
+            {
+                ROS_INFO(">>> [TF Alignment] Success! Lateral error within 1cm.");
+                break;
+            }
+
+            // 速度控制
+            geometry_msgs::Twist vel;
+            // 麦轮横移摩擦力大，速度稍微给大一点点，防止卡死不走
+            if (local_dy > 0) {
+                vel.linear.y = 0.06; // 向左平移
+            } else {
+                vel.linear.y = -0.06; // 向右平移
+            }
+            
+            pub.publish(vel);
+        }
+        catch (tf2::TransformException &ex)
+        {
+            ROS_WARN("TF Error during Y-axis adjustment: %s", ex.what());
+        }
+
+        rate.sleep();
+        timeout++;
+    }
+
+    // 刹车停止
+    geometry_msgs::Twist stop_vel;
+    stop_vel.linear.x = 0.0;
+    stop_vel.linear.y = 0.0;
+    pub.publish(stop_vel);
+    ROS_INFO(">>> [TF Alignment] Completed.");
+}
+
 void sleep(double second)
 {
     ros::Duration(second).sleep();
@@ -213,67 +284,6 @@ void sendGoal(MoveBaseClient &ac, ros::Publisher &pub, double x, double y, doubl
     {
     case actionlib::SimpleClientGoalState::SUCCEEDED:
         ROS_INFO("Target point (%.3f, %.3f, %.3f) reached successfully!", x, y, yaw);
-        // 等待底盘刹车稳定以及 AMCL 粒子滤波更新收敛
-        ros::Duration(0.5).sleep();
-
-        // 获取实际坐标并基于理论值微调
-        if (tfBuffer)
-        {
-            try
-            {
-                geometry_msgs::TransformStamped tfStamped = tfBuffer->lookupTransform("map", "base_link", ros::Time(0), ros::Duration(1.0));
-
-                double actual_x = tfStamped.transform.translation.x;
-                double actual_y = tfStamped.transform.translation.y;
-                double actual_yaw = tf2::getYaw(tfStamped.transform.rotation);
-
-                ROS_INFO(">>> [Actual Pose] X: %.3f, Y: %.3f, Yaw: %.3f", actual_x, actual_y, actual_yaw);
-
-                // 1. 计算在 map 坐标系下的全局偏差 (理论值 - 实际值)
-                double delta_x = x - actual_x;
-                double delta_y = y - actual_y;
-                ROS_INFO(">>> [Map Error] dX: %.3f, dY: %.3f", delta_x, delta_y);
-
-                // 2. 坐标系转换：将 map 下的偏差转到小车当前的 base_link 下
-                double local_dx = delta_x * cos(actual_yaw) + delta_y * sin(actual_yaw);
-                double local_dy = -delta_x * sin(actual_yaw) + delta_y * cos(actual_yaw);
-
-                ROS_INFO(">>> [Local Error] Forward dX: %.3f, Left/Right dY: %.3f", local_dx, local_dy);
-
-                // 3. 误差大于 1cm (0.01m) 时，进行精准补偿
-                if (std::abs(local_dx) > 0.01 || std::abs(local_dy) > 0.01)
-                {
-
-                    // 设定微调的平移速度 (0.05m/s，慢速更精确防止过冲)
-                    double adjust_vx = (local_dx > 0) ? 0.05 : -0.05;
-                    double adjust_vy = (local_dy > 0) ? 0.05 : -0.05;
-
-                    // 计算 move_safe 需要的步数 (move_safe 内部为 10Hz，即每步 0.1秒)
-                    // 距离 = 速度 * (count * 0.1) => count = abs(距离 / 速度) * 10
-                    int count_x = std::abs(local_dx / adjust_vx) * 10;
-                    int count_y = std::abs(local_dy / adjust_vy) * 10;
-
-                    ROS_INFO(">>> [Micro-Adjustment] Forward steps: %d, Sideways steps: %d", count_x, count_y);
-
-                    // 依次补偿前后和左右方向
-                    if (count_x > 0)
-                        move_safe(pub, adjust_vx, 0.0, count_x +2);
-                    if (count_y > 0)
-                        move_safe(pub, 0.0, adjust_vy, count_y +2);
-
-                    ROS_INFO(">>> [Micro-Adjustment Complete]");
-                }
-                else
-                {
-                    ROS_INFO(">>> [Micro-Adjustment] Error within 1cm, no adjustment needed.");
-                }
-            }
-            catch (tf2::TransformException &ex)
-            {
-                ROS_WARN("Failed to get TF for actual pose, skipping adjustment: %s", ex.what());
-            }
-        }
-        // ==========================================================
         break;
     case actionlib::SimpleClientGoalState::ABORTED:
         ROS_WARN("Navigation aborted - possibly due to obstacles or path planning failure");
