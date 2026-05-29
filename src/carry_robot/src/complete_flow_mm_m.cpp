@@ -64,22 +64,25 @@ void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id,
                double t1_x, double t1_y,
                double t2_x, double t2_y)
 {
+    double scan_dist = 0;
     if (current_id == 1)
     {
         ROS_INFO("Camera detected TAG 1. Moving to put zone 1...");
         sendGoal(ac, pub, t1_x, t1_y, 1.57);
+        scan_dist = 0.63;
     }
     else if (current_id == 2)
     {
         ROS_INFO("Camera detected TAG 2. Moving to put zone 2...");
         sendGoal(ac, pub, t2_x, t2_y, 1.57);
+        scan_dist = 0.60;
     }
     else
     {
         ROS_WARN("Invalid TAG ID detected (%d). Aborting put task!", current_id);
         return; // 如果识别出错，跳过放置
     }
-    align_with_wall(pub, 0.60); 
+    align_with_wall(pub, scan_dist); 
     
     // 等待车身稳定
     sleep(0.5);
@@ -303,7 +306,7 @@ int main(int argc, char **argv)
     double grab_desk_x = 2.15; // 抓取的桌子的x坐标
     double grab_desk_y = 0.08; // 抓取的桌子的y坐标0.01
 
-    double tag_1_put_x = 2.04; // 放置tag1的x坐标 1.99
+    double tag_1_put_x = 2.02; // 放置tag1的x坐标 1.99
     double tag_1_put_y = 2.09; // 放置tag1的y坐标 2.12
 
     double tag_2_put_x = 1.055; // 放置tag2的x坐标 1.03
