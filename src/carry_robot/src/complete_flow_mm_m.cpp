@@ -38,7 +38,7 @@ void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id,
 void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg);
 void align_with_wall(ros::Publisher &pub, double target_dist);
 void align_y_with_tf(ros::Publisher &pub, double target_x, double target_y);
-
+void align_yaw_with_tf(ros::Publisher &pub, double target_yaw);
 // 安全移动封装函数
 void move_safe(ros::Publisher &pub, double vx, double vy, int max_count)
 {
@@ -69,12 +69,13 @@ void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id,
     double scan_dist = 0;
     double target_x = 0; // 记录当前选择的X目标
     double target_y = 0; // 记录当前选择的Y目标
+    double target_yaw = 1.5708;
     if (current_id == 1)
     {
         ROS_INFO("Camera detected TAG 1. Moving to put zone 1...");
         target_x = t1_x;
         target_y = t1_y;
-        sendGoal(ac, pub, target_x, target_y, 1.57);
+        sendGoal(ac, pub, target_x, target_y, target_yaw);
         scan_dist = 0.63;
     }
     else if (current_id == 2)
@@ -82,8 +83,8 @@ void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id,
         ROS_INFO("Camera detected TAG 2. Moving to put zone 2...");
         target_x = t2_x;
         target_y = t2_y;
-        sendGoal(ac, pub, target_x, target_y, 1.57);
-        scan_dist = 0.60;
+        sendGoal(ac, pub, target_x, target_y, target_yaw);
+        scan_dist = 0.6;
     }
     else
     {
@@ -91,8 +92,12 @@ void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id,
         return; // 如果识别出错，跳过放置
     }
 
+
     align_y_with_tf(pub, target_x, target_y);
     sleep(0.5); // 等待车身稳定
+
+    align_yaw_with_tf(pub, target_yaw);
+    sleep(0.5);
 
     align_with_wall(pub, scan_dist); 
     sleep(0.5); // 等待车身稳定
@@ -197,6 +202,50 @@ void align_with_wall(ros::Publisher &pub, double target_dist)
     stop_vel.linear.x = 0.0;
     pub.publish(stop_vel);
     ROS_INFO(">>> [LiDAR Alignment] Completed.");
+}
+
+void align_yaw_with_tf(ros::Publisher &pub, double target_yaw)
+{
+    ROS_INFO(">>> [TF Alignment] Starting Yaw (Angle) alignment to %.3f...", target_yaw);
+    ros::Rate rate(10);
+    int timeout = 0;
+    int max_timeout = 50; // 最大允许调整 5 秒
+
+    while (ros::ok() && timeout < max_timeout)
+    {
+        try
+        {
+            geometry_msgs::TransformStamped current_tf = tfBuffer->lookupTransform("map", "base_link", ros::Time(0), ros::Duration(0.1));
+            double cur_yaw = tf2::getYaw(current_tf.transform.rotation);
+
+            // 计算角度偏差，并用 atan2 规范化到 [-pi, pi] 之间
+            double err_yaw = atan2(sin(target_yaw - cur_yaw), cos(target_yaw - cur_yaw));
+
+            // 如果角度误差小于 0.015 弧度 (约 0.8度)，判定对齐成功
+            if (std::abs(err_yaw) <= 0.015)
+            {
+                ROS_INFO(">>> [TF Alignment] Yaw Success! Error within 0.8 degrees.");
+                break;
+            }
+
+            geometry_msgs::Twist vel;
+            // 顺时针或逆时针自转微调
+            vel.angular.z = (err_yaw > 0) ? 0.15 : -0.15;
+            pub.publish(vel);
+        }
+        catch (tf2::TransformException &ex)
+        {
+            ROS_WARN("TF Error during Yaw adjustment: %s", ex.what());
+        }
+
+        rate.sleep();
+        timeout++;
+    }
+
+    // 刹车
+    geometry_msgs::Twist stop_vel;
+    stop_vel.angular.z = 0.0;
+    pub.publish(stop_vel);
 }
 
 // 基于TF的闭环左右横移对齐函数 (左右Y轴)
