@@ -19,7 +19,7 @@
 using namespace std;
 int tag_id = -1;           // 初始化为 -1，表示未检测到任何 tag
 bool tag_received = false; // 标志变量，表示是否接收到 tag_id
-double front_wall_distance = -1.0; 
+double front_wall_distance = -1.0;
 bool scan_received = false;
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
@@ -35,7 +35,7 @@ void move_safe(ros::Publisher &pub, double vx, double vy, int max_count);
 void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id,
                double t1_x, double t1_y,
                double t2_x, double t2_y);
-void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg);
+void scanCallback(const sensor_msgs::LaserScan::ConstPtr &msg);
 void align_with_wall(ros::Publisher &pub, double target_dist);
 void align_y_with_tf(ros::Publisher &pub, double target_x, double target_y);
 void align_yaw_with_tf(ros::Publisher &pub, double target_yaw);
@@ -92,14 +92,13 @@ void put_where(MoveBaseClient &ac, ros::Publisher &pub, int current_id,
         return; // 如果识别出错，跳过放置
     }
 
-
     align_y_with_tf(pub, target_x, target_y);
     sleep(0.5); // 等待车身稳定
 
     align_yaw_with_tf(pub, target_yaw);
     sleep(0.5);
 
-    align_with_wall(pub, scan_dist); 
+    align_with_wall(pub, scan_dist);
     sleep(0.5); // 等待车身稳定
     // 执行放置动作
     system("roslaunch carry_robot arm_put.launch");
@@ -129,35 +128,39 @@ void tagIdCallback(const std_msgs::Int32::ConstPtr &msg)
     }
 }
 // 订阅激光雷达的回调函数
-void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
+void scanCallback(const sensor_msgs::LaserScan::ConstPtr &msg)
 {
     // ROS标准中，0弧度代表车头正前方。我们计算0弧度在数组中的索引
     int center_index = (0.0 - msg->angle_min) / msg->angle_increment;
-    
+
     // 取车头正前方左右各几个点求平均值，过滤噪点
-    int window = 5; 
+    int window = 5;
     double sum = 0;
     int count = 0;
-    
-    for (int i = center_index - window; i <= center_index + window; i++) {
+
+    for (int i = center_index - window; i <= center_index + window; i++)
+    {
         // 防止索引越界
-        if (i >= 0 && i < msg->ranges.size()) {
+        if (i >= 0 && i < msg->ranges.size())
+        {
             double r = msg->ranges[i];
             // 排除无穷大或无效数据
-            if (!std::isinf(r) && !std::isnan(r) && r > 0.1) {
+            if (!std::isinf(r) && !std::isnan(r) && r > 0.1)
+            {
                 sum += r;
                 count++;
             }
         }
     }
-    
-    if (count > 0) {
+
+    if (count > 0)
+    {
         front_wall_distance = sum / count;
         scan_received = true;
     }
 }
 
-//基于激光雷达的末端闭环对齐函数
+// 基于激光雷达的末端闭环对齐函数
 void align_with_wall(ros::Publisher &pub, double target_dist)
 {
     ROS_INFO(">>> [LiDAR Alignment] Starting LiDAR alignment to target distance: %.2fm", target_dist);
@@ -168,8 +171,9 @@ void align_with_wall(ros::Publisher &pub, double target_dist)
     while (ros::ok() && timeout < max_timeout)
     {
         ros::spinOnce(); // 更新雷达数据
-        
-        if (!scan_received) {
+
+        if (!scan_received)
+        {
             rate.sleep();
             continue;
         }
@@ -178,21 +182,25 @@ void align_with_wall(ros::Publisher &pub, double target_dist)
         double error = front_wall_distance - target_dist;
 
         // 如果误差小于 1cm (0.01m)，则认为对齐成功，退出循环
-        if (std::abs(error) <= 0.01) {
+        if (std::abs(error) <= 0.01)
+        {
             ROS_INFO(">>> [LiDAR Alignment] Success! Current distance: %.3fm", front_wall_distance);
             break;
         }
 
         geometry_msgs::Twist vel;
         // 如果当前距离大于50cm，说明离墙远了，需要前进；反之需要后退
-        if (error > 0) {
-            vel.linear.x = 0.04;  // 慢速前进
-        } else {
+        if (error > 0)
+        {
+            vel.linear.x = 0.04; // 慢速前进
+        }
+        else
+        {
             vel.linear.x = -0.04; // 慢速后退
         }
-        
+
         pub.publish(vel);
-        
+
         rate.sleep();
         timeout++;
     }
@@ -283,12 +291,15 @@ void align_y_with_tf(ros::Publisher &pub, double target_x, double target_y)
             // 速度控制
             geometry_msgs::Twist vel;
             // 麦轮横移摩擦力大，速度稍微给大一点点，防止卡死不走
-            if (local_dy > 0) {
+            if (local_dy > 0)
+            {
                 vel.linear.y = 0.06; // 向左平移
-            } else {
+            }
+            else
+            {
                 vel.linear.y = -0.06; // 向右平移
             }
-            
+
             pub.publish(vel);
         }
         catch (tf2::TransformException &ex)
@@ -369,7 +380,7 @@ int main(int argc, char **argv)
     double tag_1_put_y = 2.09; // 放置tag1的y坐标 2.12
 
     double tag_2_put_x = 1.055; // 放置tag2的x坐标 1.03
-    double tag_2_put_y = 2.09; // 放置tag2的y坐标 2.12
+    double tag_2_put_y = 2.09;  // 放置tag2的y坐标 2.12
 
     // 左移
     move_safe(pub, 0.0, 0.2, 18);
@@ -422,7 +433,7 @@ int main(int argc, char **argv)
     put_where(ac, pub, tag_id, tag_1_put_x, tag_1_put_y, tag_2_put_x, tag_2_put_y);
 
     // ================= 任务结束，返回原点 =================
-
+    sendGoal(ac, pub, 2.20, 1.5, 3.92);
     // 发送返回导航点
     sendGoal(ac, pub, 0.3, 0.0, 0);
 
