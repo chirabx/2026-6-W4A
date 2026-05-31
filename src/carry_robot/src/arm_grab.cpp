@@ -81,9 +81,9 @@ int main(int argc, char **argv)
         move_safe(pub, -0.08, 0.0, 6);
     }
     // 2. 距离过远，前进
-    else if (dist > 145)
+    else if (dist > 143)
     {
-        move_safe(pub, 0.06, 0.0, int((dist - 145) / 2));
+        move_safe(pub, 0.06, 0.0, int((dist - 143) / 2));
     }
 
     // 3. Y坐标分段修正
