@@ -433,7 +433,7 @@ int main(int argc, char **argv)
     put_where(ac, pub, tag_id, tag_1_put_x, tag_1_put_y, tag_2_put_x, tag_2_put_y);
 
     // ================= 任务结束，返回原点 =================
-    sendGoal(ac, pub, 2.20, 1.5, 3.92);
+    sendGoal(ac, pub, 2.20, 1.5, -2.36);
     // 发送返回导航点
     sendGoal(ac, pub, 0.3, 0.0, 0);
 
